@@ -18,3 +18,4 @@ typing-extensions==3.10.0.0
 yarl==1.6.3
 youtube-dl==2021.6.6
 youtube-search-python==1.4.6
+PyNaCl==1.4.0
