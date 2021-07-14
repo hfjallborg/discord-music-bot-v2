@@ -12,6 +12,7 @@ def get_audio(url):
     audio = pafy.new(url).getbestaudio()
     return audio
 
+
 def find_video(search_term):
     """Attempts to find a YouTube video id from search term(s).
 

@@ -52,7 +52,7 @@ class MusicBot(commands.Bot):
                 raise TypeError(("on_server_remove must be callable, not "
                                  f"{on_server_remove.__class__.__name__}"))
         self.on_server_remove = on_server_remove
-        
+
         commands.Bot.__init__(self, command_prefix=cmd_prefix,
                               self_bot=False)
         self.logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class MusicBot(commands.Bot):
         title = vc.now_playing["title"]
         msg = (f"\N{MUSICAL NOTE} **Now playing:** `{title}`")
         return msg
-    
+
     async def _send_msg(self, ctx, event, *args):
         msg = self.messages[event]
         if callable(msg):
@@ -95,7 +95,7 @@ class MusicBot(commands.Bot):
         title = vc.queue[0]["title"]
         msg = (f"Added `{title}` to queue.")
         return msg
-    
+
     def _default_skip_msg(self, vc):
         # Default message when skipping song
         if len(vc.queue) > 0:
@@ -118,7 +118,7 @@ class MusicBot(commands.Bot):
         vc.play(discord.FFmpegPCMAudio(audio.url),
                 after=lambda e: self._play_next(vc))
         vc.now_playing = song
-    
+
     def _init_events(self):
         if self.on_server_join is not None:
             @self.event
@@ -141,7 +141,7 @@ class MusicBot(commands.Bot):
                           pass_context=True)
             async def change_prefix(ctx, new_prefix):
                 self.prefix_method(self, ctx.message, new_prefix)
-        
+
         @self.command(name="play", pass_context=True)
         async def play(ctx, *args):
             user = ctx.message.author
@@ -180,7 +180,7 @@ class MusicBot(commands.Bot):
                     after=lambda e: self._play_next(vc))
             vc.now_playing = song
             await ctx.send(self.on_play_msg(vc))
-                    
+
         @self.command(name="skip", pass_context=True)
         async def skip(ctx):
             user = ctx.message.author
