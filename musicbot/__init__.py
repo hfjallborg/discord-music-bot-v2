@@ -1,1 +1,1 @@
-__all__ = ["musicbot", "handler", "iniparser"]
+__all__ = ["client", "manager", "audio"]

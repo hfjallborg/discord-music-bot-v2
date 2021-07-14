@@ -1,19 +1,19 @@
-from .iniparser import IniParser
 import os
 import sys
-from .musicbot import MusicBot
 import logging
 import json
 
+from .client import MusicBot
 
-class BotHandler:
+
+class BotManager:
 
     def __init__(self, prefix_json="./prefixes.json",
                  perms_json="./perms.json"):
         """
         :param prefix_json: Path to json containing bot- and server
             specific command prefixes. For use with the
-            :class:`BotHandler`:s prefix methods.
+            :class:`BotManager`:s prefix methods.
         :type prefix_json: str
         :param perms_json: Path to json containing bot- and server
             specific user permissions regarding bots.
@@ -25,9 +25,9 @@ class BotHandler:
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def add_bot(self, bot, nickname, token, default_prefix="!"):
-        """Adds bot to handler.
+        """Adds bot to manager.
 
-        :param bot: A :class:`Bot` or derived object to add to handler.
+        :param bot: A :class:`Bot` or derived object to add to manager.
         :type bot: discord.ext.commands.Bot
         :param nickname: Nickname to give bot.
         :type nickname: str
@@ -86,7 +86,10 @@ class BotHandler:
 
     def on_join(self, bot, guild):
         self.set_default_prefix(bot, guild)
-        self.logger.info(f"{name} joined server {guild_id}.")
+        for nick in self.bots:
+            if self.bots[nick]["client"] == bot:
+                name = nick
+        self.logger.info(f"{name} joined server {str(guild.id)}.")
 
     def set_default_prefix(self, bot, guild):
         guild_id = str(guild.id)
@@ -95,7 +98,10 @@ class BotHandler:
                 name = nick
         # Get default prefix for this bot
         def_prefix = self.bots[name]["prefix"]
-        bot_data = self.prefixes[name]
+        if name in self.prefixes.keys():
+            bot_data = self.prefixes[name]
+        else:
+            bot_data = {}
         bot_data[guild_id] = {
             "prefix": def_prefix
         }
