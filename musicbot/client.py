@@ -12,6 +12,24 @@ from .audio.youtube import find_video, get_audio
 
 class MusicBot(commands.Bot):
 
+    class Song:
+
+        def __init__(self, audio, title, url=None):
+            self.audio = audio
+            self.title = title
+            self.url = url
+
+        @classmethod
+        def from_youtube(cls, query):
+            video = find_video(query)
+            audio = get_audio(video["url"])
+            title = video["title"]
+            url = video["url"]
+            return cls(audio, title, url)
+
+        def __str__(self):
+            return self.title
+
     def __init__(self, cmd_prefix="!",
                  change_prefix=None, on_server_join=None,
                  on_server_remove=None):
@@ -63,7 +81,9 @@ class MusicBot(commands.Bot):
             "NotInVoice": "You are not connected to a voice channel.",
             "BotBusy": "Bot is busy in another channel.",
             "Searching": self._default_search_msg,
-            "Queueing": self._default_queue_msg,
+            "Playing": self._default_on_play_msg,
+            "ViewQueue": self._default_view_queue_msg,
+            "Queueing": self._default_add_to_queue_msg,
             "Skipping": self._default_skip_msg
         }
         self._init_events()
@@ -74,14 +94,14 @@ class MusicBot(commands.Bot):
 
     def _default_on_play_msg(self, vc):
         # Default message when playing song
-        title = vc.now_playing["title"]
-        msg = (f"\N{MUSICAL NOTE} **Now playing:** `{title}`")
+        # title = vc.now_playing.title
+        msg = (f"\N{MUSICAL NOTE} **Now playing:** `{vc.now_playing}`")
         return msg
 
-    async def _send_msg(self, ctx, event, *args):
+    async def _send_msg(self, ctx, event, arg=None):
         msg = self.messages[event]
         if callable(msg):
-            msg = msg(args)
+            msg = msg(arg)
         if msg != "":
             await ctx.send(msg)
 
@@ -90,33 +110,43 @@ class MusicBot(commands.Bot):
         msg = (f"Searching for: `{query}`")
         return msg
 
-    def _default_queue_msg(self, vc):
+    def _default_add_to_queue_msg(self, vc):
         # Default message when queueing song
-        title = vc.queue[0]["title"]
-        msg = (f"Added `{title}` to queue.")
+        queued_song = vc.queue[len(vc.queue) - 1]
+        msg = (f"Added `{queued_song}` to queue.")
+        return msg
+
+    def _default_view_queue_msg(self, vc):
+        vc = get(self.voice_clients, guild=ctx.guild)
+        msg = f""
+        for i in range(len(vc.queue)):
+            song = vc.queue[i]
+            nr = i + 1
+            msg += f"**{nr}.** `{song}`\n"
         return msg
 
     def _default_skip_msg(self, vc):
         # Default message when skipping song
         if len(vc.queue) > 0:
             new_song = vc.queue[0]
-            title = new_song["title"]
-            msg = f"Skipping! :track_next: `{title}`"
+            msg = f"Skipping! :track_next: `{new_song}`"
         else:
             msg = "Skipping!"
         return msg
 
-    def _play_next(self, vc):
+    def _play_next(self, e=None, vc=None):
         # Plays next song in queue
+        if vc is None:
+            return
         queue = vc.queue
         if len(vc.queue) == 0:
             return
-        song = vc.queue.pop()
-        audio = song["audio"]
+        song = vc.queue.pop(0)
+        audio = song.audio
         if vc.is_playing():
             vc.stop()
         vc.play(discord.FFmpegPCMAudio(audio.url),
-                after=lambda e: self._play_next(vc))
+                after=self._play_next)
         vc.now_playing = song
 
     def _init_events(self):
@@ -130,10 +160,6 @@ class MusicBot(commands.Bot):
                 self.on_server_remove(self, guild)
 
     def _init_commands(self):
-        @self.command(name="HelloWorld", pass_context=True)
-        async def HelloWorld(ctx):
-            await ctx.send("Hello World!")
-
         # The change_prefix command will only be available if you defined
         # the change_prefix callable when initiating the bot
         if self.prefix_method:
@@ -142,7 +168,7 @@ class MusicBot(commands.Bot):
             async def change_prefix(ctx, new_prefix):
                 self.prefix_method(self, ctx.message, new_prefix)
 
-        @self.command(name="play", pass_context=True)
+        @self.command(name="play", aliases=["p"], pass_context=True)
         async def play(ctx, *args):
             user = ctx.message.author
             try:
@@ -159,29 +185,24 @@ class MusicBot(commands.Bot):
                 setattr(vc, "queue", [])
                 setattr(vc, "now_playing", None)
                 if vc.channel != voice_channel:
-                    if self.messages["BotBusy"] != "":
-                        await ctx.send(self.messages["BotBusy"])
+                    await self._send_msg(ctx, "BotBusy")
                     return
 
             query = " ".join(args)
-            await ctx.send(self.messages["Searching"](query))
-            video = find_video(query)
-            audio = get_audio(video["url"])
-            song = {
-                "audio": audio,
-                "title": video["title"],
-                "url": video["url"]
-            }
+            setattr(vc, "_query", query)
+            await self._send_msg(ctx, "Searching", query)
+            song = self.Song.from_youtube(query)
+            audio = song.audio
             if vc.is_playing():  # Song already playing
                 vc.queue.append(song)
-                await ctx.send(self.messages["Queueing"](vc))
+                await self._send_msg(ctx, "Queueing", vc)
                 return
             vc.play(discord.FFmpegPCMAudio(audio.url,),
-                    after=lambda e: self._play_next(vc))
+                    after=self._play_next(vc=vc))
             vc.now_playing = song
-            await ctx.send(self.on_play_msg(vc))
+            await self._send_msg(ctx, "Playing", vc)
 
-        @self.command(name="skip", pass_context=True)
+        @self.command(name="skip", aliases=["s"], pass_context=True)
         async def skip(ctx):
             user = ctx.message.author
             vc = get(self.voice_clients, guild=ctx.guild)
@@ -189,5 +210,26 @@ class MusicBot(commands.Bot):
                 if len(vc.queue) == 0:
                     vc.stop()
                 else:
-                    await ctx.send(self.messages["Skipping"](vc))
-                    self._play_next(vc)
+                    await self._send_msg(ctx, "Skipping", vc)
+                    self._play_next(vc=vc)
+
+        @self.command(name="pause", pass_context=True)
+        async def pause(ctx):
+            vc = get(self.voice_clients, guild=ctx.guild)
+            if vc.is_playing():
+                vc.pause()
+            else:
+                vc.resume()
+
+        @self.command(name="resume", aliases=["r"], pass_context=True)
+        async def resume(ctx):
+            vc = get(self.voice_clients, guild=ctx.guild)
+            if vc.is_paused():
+                vc.resume()
+            else:
+                return
+
+        @self.command(name="queue", pass_context=True)
+        async def queue(ctx):
+            vc = get(self.voice_clients, guild=ctx.guild)
+            await self._send_msg(ctx, "ViewQueue", vc)

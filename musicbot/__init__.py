@@ -1,1 +1,1 @@
-__all__ = ["client", "manager", "audio"]
+__all__ = ["client", "audio"]
