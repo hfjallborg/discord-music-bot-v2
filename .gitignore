@@ -1,3 +1,4 @@
 __pycache__/
 musicbot/__pycache__
 musicbot/audio/__pycache__
+musicbot/client/__pycache__
